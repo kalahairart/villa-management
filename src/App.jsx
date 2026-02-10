@@ -1,47 +1,102 @@
-import React, { useState, useEffect } from 'react'
+// src/App.jsx
+import React, { Suspense } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
-import { supabase } from './services/supabaseClient'
-import Login from './pages/Login'
-import Dashboard from './pages/Dashboard'
-import VillaList from './pages/VillaList'
-import VillaForm from './pages/VillaForm'
+import { AuthProvider } from './contexts/AuthContext'
+import ErrorBoundary from './components/ErrorBoundary'
 import './index.css'
 
-function App() {
-  const [session, setSession] = useState(null)
-  const [loading, setLoading] = useState(true)
+// Lazy load untuk optimize
+const Login = React.lazy(() => import('./pages/Login'))
+const Dashboard = React.lazy(() => import('./pages/Dashboard'))
+const VillaList = React.lazy(() => import('./pages/VillaList'))
+const VillaForm = React.lazy(() => import('./pages/VillaForm'))
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      setLoading(false)
-    })
+// Loading component
+const LoadingSpinner = () => (
+  <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="text-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+      <p className="mt-4 text-gray-600">Memuat aplikasi...</p>
+    </div>
+  </div>
+)
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
-    })
+// Private Route wrapper
+const PrivateRoute = ({ children }) => {
+  const [isAuthenticated, setIsAuthenticated] = React.useState(false)
+  const [loading, setLoading] = React.useState(true)
 
-    return () => subscription.unsubscribe()
+  React.useEffect(() => {
+    // Check authentication
+    const checkAuth = async () => {
+      try {
+        // Cek apakah ada token di localStorage
+        const token = localStorage.getItem('sb-auth-token')
+        setIsAuthenticated(!!token)
+      } catch (error) {
+        console.error('Auth check error:', error)
+        setIsAuthenticated(false)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    checkAuth()
   }, [])
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    )
-  }
+  if (loading) return <LoadingSpinner />
+  
+  return isAuthenticated ? children : <Navigate to="/login" />
+}
 
+function App() {
+  console.log('App component rendering...')
+  
   return (
-    <Router>
-      <Routes>
-        <Route path="/login" element={!session ? <Login /> : <Navigate to="/" />} />
-        <Route path="/" element={session ? <Dashboard /> : <Navigate to="/login" />} />
-        <Route path="/villas" element={session ? <VillaList /> : <Navigate to="/login" />} />
-        <Route path="/villas/new" element={session ? <VillaForm /> : <Navigate to="/login" />} />
-        <Route path="/villas/edit/:id" element={session ? <VillaForm /> : <Navigate to="/login" />} />
-      </Routes>
-    </Router>
+    <ErrorBoundary>
+      <Router>
+        <AuthProvider>
+          <Suspense fallback={<LoadingSpinner />}>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route 
+                path="/" 
+                element={
+                  <PrivateRoute>
+                    <Dashboard />
+                  </PrivateRoute>
+                } 
+              />
+              <Route 
+                path="/villas" 
+                element={
+                  <PrivateRoute>
+                    <VillaList />
+                  </PrivateRoute>
+                } 
+              />
+              <Route 
+                path="/villas/new" 
+                element={
+                  <PrivateRoute>
+                    <VillaForm />
+                  </PrivateRoute>
+                } 
+              />
+              <Route 
+                path="/villas/edit/:id" 
+                element={
+                  <PrivateRoute>
+                    <VillaForm />
+                  </PrivateRoute>
+                } 
+              />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
+        </AuthProvider>
+      </Router>
+    </ErrorBoundary>
   )
 }
 
