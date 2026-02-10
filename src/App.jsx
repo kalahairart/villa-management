@@ -1,67 +1,46 @@
-// src/App.jsx
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
-import { AuthProvider } from './contexts/AuthContext'
-import PrivateRoute from './components/Auth/PrivateRoute'
+import { supabase } from './services/supabaseClient'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import VillaList from './pages/VillaList'
 import VillaForm from './pages/VillaForm'
-import VillaDetail from './pages/VillaDetail'
-import Statistics from './pages/Statistics'
-import Layout from './components/Layout/Layout'
+import './index.css'
 
 function App() {
+  const [session, setSession] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session)
+      setLoading(false)
+    })
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session)
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    )
+  }
+
   return (
     <Router>
-      <AuthProvider>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/" element={
-            <PrivateRoute>
-              <Layout>
-                <Dashboard />
-              </Layout>
-            </PrivateRoute>
-          } />
-          <Route path="/villas" element={
-            <PrivateRoute>
-              <Layout>
-                <VillaList />
-              </Layout>
-            </PrivateRoute>
-          } />
-          <Route path="/villas/new" element={
-            <PrivateRoute>
-              <Layout>
-                <VillaForm />
-              </Layout>
-            </PrivateRoute>
-          } />
-          <Route path="/villas/edit/:id" element={
-            <PrivateRoute>
-              <Layout>
-                <VillaForm />
-              </Layout>
-            </PrivateRoute>
-          } />
-          <Route path="/villas/:id" element={
-            <PrivateRoute>
-              <Layout>
-                <VillaDetail />
-              </Layout>
-            </PrivateRoute>
-          } />
-          <Route path="/statistics" element={
-            <PrivateRoute>
-              <Layout>
-                <Statistics />
-              </Layout>
-            </PrivateRoute>
-          } />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </AuthProvider>
+      <Routes>
+        <Route path="/login" element={!session ? <Login /> : <Navigate to="/" />} />
+        <Route path="/" element={session ? <Dashboard /> : <Navigate to="/login" />} />
+        <Route path="/villas" element={session ? <VillaList /> : <Navigate to="/login" />} />
+        <Route path="/villas/new" element={session ? <VillaForm /> : <Navigate to="/login" />} />
+        <Route path="/villas/edit/:id" element={session ? <VillaForm /> : <Navigate to="/login" />} />
+      </Routes>
     </Router>
   )
 }
